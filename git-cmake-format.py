@@ -1,19 +1,19 @@
 #!/usr/bin/python
 
+import argparse
 import os
+import shlex
 import subprocess
 import sys
 
 
-GIT = 'git'
-CLANG_FORMAT = 'clang-format'  # TODO
 STYLE = '-style=file'
-ignore_list = []
+SOURCE_EXTENSIONS = ('.h', '.cpp', '.hpp', '.c', '.cc', '.hh', '.cxx', '.hxx')
 
 
 def get_git_head():
     rev_parse = subprocess.Popen(
-        [GIT, 'rev-parse', '--verify', 'HEAD'],
+        shlex.split('git rev-parse --verify HEAD'),
         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     rev_parse.communicate()
     if rev_parse.returncode:
@@ -24,107 +24,85 @@ def get_git_head():
 
 def get_git_root():
     rev_parse = subprocess.Popen(
-        [GIT, 'rev-parse', '--show-toplevel'],
+        shlex.split('git rev-parse --show-toplevel'),
         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     return rev_parse.stdout.read().strip()
 
 
 def get_edited_files(in_place):
     head = get_git_head()
-    git_args = [GIT, 'diff-index']
+    git_args = ['git diff-index']
     if not in_place:
         git_args.append('--cached')
-    git_args.extend(['--diff-filter=ACMR', '--name-only', head])
-    diff_index = subprocess.Popen(git_args, stdout=subprocess.PIPE)
+    git_args.extend(['--diff-filter=ACMR --name-only', head])
+    git_command = ' '.join(git_args)
+    diff_index = subprocess.Popen(shlex.split(git_command),
+                                  stdout=subprocess.PIPE)
     diff_index_ret = diff_index.stdout.read().strip()
     diff_index_ret = diff_index_ret.decode()
 
     return diff_index_ret.split('\n')
 
 
-def is_formattable(filename):
+def is_formattable(filename, ignore_list):
     for directory in ignore_list:
         if '' != directory and '' != os.path.commonprefix(
                 [os.path.relpath(filename), os.path.relpath(directory)]):
             return False
     extension = os.path.splitext(filename)[1]
-    for ext in ['.h', '.cpp', '.hpp', '.c', '.cc', '.hh', '.cxx', '.hxx']:
-        if ext == extension:
-            return True
-    return False
+    return extension in SOURCE_EXTENSIONS
 
 
-def format_file(filename, git_root):
-    subprocess.Popen(
-        [CLANG_FORMAT, STYLE, '-i', os.path.join(git_root, filename)])
-    return
+def format_file(clang_format, style, filename, git_root):
+    command = ' '.join(
+        [clang_format, style, '-i', os.path.join(git_root, filename)])
+    subprocess.Popen(shlex.split(command))
 
 
-def requires_format(filename):
-    git_show_ret = subprocess.Popen([GIT, "show", ":" + filename],
+def requires_format(clang_format, style, filename):
+    git_show_ret = subprocess.Popen(shlex.split('git show:' + filename),
                                     stdout=subprocess.PIPE)
-    clang_format_ret = subprocess.Popen([CLANG_FORMAT, STYLE],
-                                        stdin=git_show_ret.stdout,
-                                        stdout=subprocess.PIPE)
+    clang_format_ret = subprocess.Popen(
+        shlex.split(''.join([clang_format, style])),
+        stdin=git_show_ret.stdout, stdout=subprocess.PIPE)
     formatted_content = clang_format_ret.stdout.read()
 
-    file_content = subprocess.Popen([GIT, "show", ":" + filename],
+    file_content = subprocess.Popen(shlex.split('git show:' + filename),
                                     stdout=subprocess.PIPE).stdout.read()
 
-    if formatted_content == file_content:
-        return False
-    return True
+    return formatted_content != file_content
 
 
-def print_usage_and_exit():
-    print ("Usage: " + sys.argv[0] + " [--pre-commit|--cmake] " +
-           "[<path/to/git>] [<path/to/clang-format]")
-    sys.exit(1)
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers()
+    precommit_parser = subparsers.add_parser('pre-commit')
+    precommit_parser.set_defaults(in_place=False)
+    cmake_parser = subparsers.add_parser('cmake')
+    cmake_parser.set_defaults(in_place=True)
+    parser.add_argument('clang_format_path', metavar='clang-format-path')
 
-
-if __name__ == "__main__":
-    if 2 > len(sys.argv):
-        print_usage_and_exit()
-
-    if "--pre-commit" == sys.argv[1]:
-        in_place = False
-    elif "--cmake" == sys.argv[1]:
-        in_place = True
-    else:
-        print_usage_and_exit()
-
-    for arg in sys.argv[2:]:
-        if "git" in arg:
-            GIT = arg
-        elif "clang-format" in arg:
-            CLANG_FORMAT = arg
-        elif "-style=" in arg:
-            STYLE = arg
-        elif "-ignore=" in arg:
-            ignore_list = arg.strip("-ignore=").split(";")
-        else:
-            print_usage_and_exit()
-
-    edited_files = get_edited_files(in_place)
-
+    args = parser.parse_args()
     return_code = 0
+    ignore_list = ()
+    edited_files = get_edited_files(args.in_place)
 
-    if in_place:
+    if args.in_place:
         git_root = get_git_root()
         for filename in edited_files:
-            if is_formattable(filename):
-                format_file(filename, git_root)
-        sys.exit(return_code)
-
-    for filename in edited_files:
-        if not is_formattable(filename):
-            continue
-        if requires_format(filename):
-            print ("'" + filename +
-                   "' must be formatted, run the cmake target 'format'")
+            if is_formattable(filename, ignore_list):
+                format_file(args.clang_format_path, STYLE, filename, git_root)
+    else:
+        unformatted = [
+            filename for filename in edited_files
+            if is_formattable(filename, ignore_list) and
+            requires_format(args.clang_format_path, STYLE, filename)]
+        if unformatted:
+            print ('The following files must be formatted. '
+                   'Please run "make format":\n' + '\n'.join(unformatted))
             return_code = 1
 
-    if 1 == return_code:
-        subprocess.Popen([GIT, "reset", "HEAD", "--", "."])
+    if return_code:
+        subprocess.Popen(shlex.split('git reset HEAD -- .'))
 
     sys.exit(return_code)
