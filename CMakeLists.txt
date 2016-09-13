@@ -1,5 +1,5 @@
-project(git-clang-format-cmake)
 cmake_minimum_required(VERSION 2.8)
+project(git-clang-format-cmake NONE)
 
 set(CLANG_FORMAT_BASENAME "clang-format-3.4")
 find_program(CLANG_FORMAT ${CLANG_FORMAT_BASENAME})
@@ -12,7 +12,7 @@ endif()
 set(GCF_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/git-cmake-format.py)
 
 execute_process(COMMAND git rev-parse --show-toplevel
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/..
     OUTPUT_VARIABLE GCF_GIT_ROOT
     OUTPUT_STRIP_TRAILING_WHITESPACE)
 if(NOT GCF_GIT_ROOT)
