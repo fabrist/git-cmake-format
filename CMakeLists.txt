@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 2.8)
 project(git-clang-format-cmake NONE)
 
+find_package(PythonInterp 2.7 EXACT)
+
 set(CLANG_FORMAT_BASENAME "clang-format-3.4")
 find_program(CLANG_FORMAT ${CLANG_FORMAT_BASENAME})
 if(CLANG_FORMAT)
