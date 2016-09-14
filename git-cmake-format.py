@@ -75,19 +75,18 @@ def requires_format(clang_format, style, filename):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers()
-    precommit_parser = subparsers.add_parser('pre-commit')
-    precommit_parser.set_defaults(in_place=False)
-    cmake_parser = subparsers.add_parser('cmake')
-    cmake_parser.set_defaults(in_place=True)
+    PRECOMMIT = 'pre-commit'
+    CMAKE = 'cmake'
+    parser.add_argument('context', choices=[PRECOMMIT, CMAKE])
     parser.add_argument('clang_format_path', metavar='clang-format-path')
 
     args = parser.parse_args()
     return_code = 0
     ignore_list = ()
-    edited_files = get_edited_files(args.in_place)
+    in_place = args.context == CMAKE
+    edited_files = get_edited_files(in_place)
 
-    if args.in_place:
+    if args.context == CMAKE:
         git_root = get_git_root()
         for filename in edited_files:
             if is_formattable(filename, ignore_list):
