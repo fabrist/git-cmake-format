@@ -25,9 +25,9 @@ set(PRECOMMIT_FILE  ${GCF_GIT_ROOT}/.git/hooks/pre-commit)
 set(HOOK_COMMAND
     "${PYTHON_EXECUTABLE} ${GCF_SCRIPT} pre-commit ${CLANG_FORMAT}")
 if(EXISTS ${PRECOMMIT_FILE})
-    file(WRITE ${PRECOMMIT_FILE} "#!/bin/bash\n\n${HOOK_COMMAND}")
-else()
     file(APPEND ${PRECOMMIT_FILE} "\n${HOOK_COMMAND}")
+else()
+    file(WRITE ${PRECOMMIT_FILE} "#!/bin/bash\n\n${HOOK_COMMAND}")
 endif()
 
 add_custom_target(format
