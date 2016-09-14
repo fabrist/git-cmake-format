@@ -46,6 +46,6 @@ else()
         WORLD_READ WORLD_EXECUTE)
 endif()
 
-add_custom_target(format
+add_custom_target(format ALL
     ${PYTHON_EXECUTABLE} ${GCF_SCRIPT} cmake ${CLANG_FORMAT}
 	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
